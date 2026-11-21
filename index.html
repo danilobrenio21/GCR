@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GCR FOOD PRODUCTS TRADING — Cold Storage & OTF Inventory Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #0f172a; }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 font-extrabold flex items-center justify-center text-lg shadow">
+          GCR
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-base sm:text-lg tracking-tight text-white">GCR FOOD PRODUCTS TRADING</h1>
+            <span class="hidden md:inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+              CRYSTAL COLD STORAGE • JUNE 1–15, 2026
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">OTF Stock Tracking, Re-Inward Balances & Client Pull-Out Reconciliation</p>
+        </div>
+      </div>
+
+      <!-- DEDICATED UPDATE / AUTO-SYNC CONTROLS -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <div class="hidden xl:flex items-center gap-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-lg text-xs">
+          <span id="autoSyncDot" class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+          <span class="text-slate-300">Auto-Rollup:</span>
+          <button id="toggleAutoSyncBtn" onclick="toggleAutoSync()" class="font-semibold text-emerald-400 hover:underline">ON</button>
+          <span class="text-slate-600">|</span>
+          <span id="lastSyncText" class="text-slate-400">Synced: June 1–15 Baseline</span>
+        </div>
+
+        <button onclick="switchTab('sync')" class="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs sm:text-sm px-3.5 py-2 rounded-lg shadow transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <span>Sync Excel / Auto-Update</span>
+        </button>
+
+        <button onclick="openNewOtfModal()" class="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-lg transition">
+          <span>+ New OTF Entry</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- SUB-NAVIGATION TABS -->
+    <div class="bg-slate-950/70 border-t border-slate-800">
+      <div class="max-w-[1440px] mx-auto px-4 sm:px-6 flex items-center gap-1 overflow-x-auto scrollbar-thin">
+        <button onclick="switchTab('dashboard')" id="tab-dashboard" class="nav-tab px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-amber-400 text-amber-400 whitespace-nowrap">
+          Executive Dashboard
+        </button>
+        <button onclick="switchTab('otf')" id="tab-otf" class="nav-tab px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white whitespace-nowrap">
+          OTF Batch Ledger (19 Batches)
+        </button>
+        <button onclick="switchTab('inventory')" id="tab-inventory" class="nav-tab px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white whitespace-nowrap">
+          Master Item Stock (32 SKUs)
+        </button>
+        <button onclick="switchTab('clients')" id="tab-clients" class="nav-tab px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white whitespace-nowrap">
+          Client Invoices & Variances
+        </button>
+        <button onclick="switchTab('sync')" id="tab-sync" class="nav-tab px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-white whitespace-nowrap flex items-center gap-1.5">
+          <span>Auto-Sync & Excel Updater</span>
+          <span class="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 text-[10px] rounded font-bold">AUTO</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT AREA -->
+  <main class="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- ==================== TAB 1: EXECUTIVE DASHBOARD ==================== -->
+    <section id="view-dashboard" class="space-y-6">
+      <!-- KPI STRIP -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Cold Storage Qty</span>
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-700" id="kpi-otf-count">19 OTFs</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="kpi-total-qty" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tabular-nums">3,314</span>
+            <span class="text-xs text-slate-500 font-medium">units (PC/BOX/PACK)</span>
+          </div>
+          <p class="mt-1.5 text-xs text-slate-500">Total Weight: <strong id="kpi-total-weight" class="text-slate-800 tabular-nums">12,167.85 kg</strong></p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-emerald-700">Re-Inward Balance</span>
+            <span id="kpi-reinward-pct" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700">76.5%</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="kpi-total-reinward" class="text-2xl sm:text-3xl font-extrabold text-emerald-600 tabular-nums">2,535</span>
+            <span class="text-xs text-slate-500 font-medium">units remaining</span>
+          </div>
+          <p class="mt-1.5 text-xs text-slate-500">Held in Crystal Cold Storage</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-blue-700">Total Pulled Out</span>
+            <span id="kpi-pulled-pct" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700">23.5%</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="kpi-total-pulled" class="text-2xl sm:text-3xl font-extrabold text-blue-600 tabular-nums">779</span>
+            <span class="text-xs text-slate-500 font-medium">units dispatched</span>
+          </div>
+          <p class="mt-1.5 text-xs text-slate-500">Invoiced Qty: <strong id="kpi-total-invoiced" class="text-slate-800 tabular-nums">1,179</strong> units</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold uppercase tracking-wider text-rose-700">Variance / Audit Alerts</span>
+            <span id="kpi-alert-count" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700">25 flags</span>
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span id="kpi-net-variance" class="text-2xl sm:text-3xl font-extrabold text-rose-600 tabular-nums">-158</span>
+            <span class="text-xs text-slate-500 font-medium">net unit variance</span>
+          </div>
+          <p class="mt-1.5 text-xs text-slate-500">Includes Sodexo, SMPI & Ramada splits</p>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <h2 class="font-bold text-slate-900 text-base">Daily Cold Storage Movement (June 1–14, 2026)</h2>
+              <p class="text-xs text-slate-500">Re-Inward Stock vs. Pulled Out Dispatch Volume by Date</p>
+            </div>
+            <button onclick="switchTab('otf')" class="text-xs font-semibold text-amber-600 hover:text-amber-700">View All 19 OTFs →</button>
+          </div>
+          <div class="h-72">
+            <canvas id="dailyMovementChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="mb-4">
+            <h2 class="font-bold text-slate-900 text-base">Top Clients by Dispatched Qty</h2>
+            <p class="text-xs text-slate-500">Pulled-Out vs. Invoiced Allocation</p>
+          </div>
+          <div class="h-72">
+            <canvas id="clientAllocationChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUDIT ANOMALIES & RECENT OTF SNAPSHOT -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Variance / Audit Watchlist -->
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              <span>Spreadsheet Variance & Anomaly Watch</span>
+            </h3>
+            <span class="text-[11px] font-semibold text-slate-400">Auto-Detected</span>
+          </div>
+          <div id="anomalyList" class="space-y-2.5 overflow-y-auto max-h-80 pr-1 scrollbar-thin text-xs"></div>
+        </div>
+
+        <!-- Top Heavyweight Inventory SKUs -->
+        <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="font-bold text-slate-900 text-sm">Top Seafood SKUs by Cold-Storage Weight (kg)</h3>
+              <p class="text-xs text-slate-500">Aggregated across all June 1–15 OTF records</p>
+            </div>
+            <button onclick="exportCurrentCSV()" class="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 px-3 py-1.5 rounded-lg transition">
+              Export CSV
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-slate-200 text-slate-500 uppercase text-[11px]">
+                  <th class="py-2.5 px-2">Item / SKU</th>
+                  <th class="py-2.5 px-2 text-right">Total Qty</th>
+                  <th class="py-2.5 px-2 text-right">Total Weight (kg)</th>
+                  <th class="py-2.5 px-2 text-right">Re-Inward</th>
+                  <th class="py-2.5 px-2 text-right">Pulled Out</th>
+                  <th class="py-2.5 px-2 text-right">Quick Action</th>
+                </tr>
+              </thead>
+              <tbody id="topSkuTableBody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: OTF BATCH LEDGER ==================== -->
+    <section id="view-otf" class="hidden space-y-4">
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2 flex-1">
+          <input type="text" id="otfSearchInput" oninput="renderOtfTable()" placeholder="Search OTF #, Item, Client, or Invoice..." class="w-full sm:w-72 text-xs sm:text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          <select id="otfSelectFilter" onchange="renderOtfTable()" class="text-xs sm:text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white">
+            <option value="ALL">All 19 OTF Batches</option>
+          </select>
+          <select id="clientSelectFilter" onchange="renderOtfTable()" class="text-xs sm:text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white">
+            <option value="ALL">All Clients</option>
+          </select>
+          <label class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100 px-3 py-2 rounded-lg cursor-pointer">
+            <input type="checkbox" id="onlyPulledOutCheck" onchange="renderOtfTable()" class="rounded text-amber-500 focus:ring-amber-400" />
+            <span>Dispatched / Invoiced Only</span>
+          </label>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="openNewOtfModal()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg">
+            + Add Line Item
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto max-h-[650px] scrollbar-thin">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-900 text-slate-200 sticky top-0 z-10 uppercase text-[11px]">
+              <tr>
+                <th class="py-3 px-3">Date</th>
+                <th class="py-3 px-3">OTF #</th>
+                <th class="py-3 px-3">Item</th>
+                <th class="py-3 px-2">Pkg</th>
+                <th class="py-3 px-2 text-right">Qty</th>
+                <th class="py-3 px-2 text-right">Weight (kg)</th>
+                <th class="py-3 px-2 text-right">Re-Inward</th>
+                <th class="py-3 px-2 text-right">Pulled Out</th>
+                <th class="py-3 px-3">Invoice</th>
+                <th class="py-3 px-3">Client</th>
+                <th class="py-3 px-2 text-right">Inv Qty</th>
+                <th class="py-3 px-2 text-right">Variance</th>
+                <th class="py-3 px-3">Remarks</th>
+                <th class="py-3 px-3 text-right">Update</th>
+              </tr>
+            </thead>
+            <tbody id="otfLedgerBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: MASTER ITEM STOCK ==================== -->
+    <section id="view-inventory" class="hidden space-y-4">
+      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-slate-900 text-base">Consolidated Cold-Storage SKU Rollup</h2>
+          <p class="text-xs text-slate-500">Live Re-Inward vs. Pulled Out totals across all OTF batches</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="text" id="skuSearchInput" oninput="renderMasterInventory()" placeholder="Filter seafood item..." class="text-xs sm:text-sm border border-slate-300 rounded-lg px-3 py-2" />
+          <button onclick="exportCurrentCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg">
+            Download Master CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase text-[11px]">
+              <tr>
+                <th class="py-3 px-4">Seafood SKU</th>
+                <th class="py-3 px-3">Packaging Types</th>
+                <th class="py-3 px-3 text-right">OTF Appearances</th>
+                <th class="py-3 px-3 text-right">Total Initial Qty</th>
+                <th class="py-3 px-3 text-right">Total Weight (kg)</th>
+                <th class="py-3 px-3 text-right">Re-Inward (In Stock)</th>
+                <th class="py-3 px-3 text-right">Pulled Out</th>
+                <th class="py-3 px-3 text-right">Utilization %</th>
+                <th class="py-3 px-4 text-right">Adjust Stock</th>
+              </tr>
+            </thead>
+            <tbody id="masterInventoryBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: CLIENT INVOICES & VARIANCES ==================== -->
+    <section id="view-clients" class="hidden space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="clientCardsContainer"></div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <h3 class="font-bold text-slate-900 text-base mb-3">Invoiced Pull-Out Reconciliation Log</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase text-[11px]">
+              <tr>
+                <th class="py-2.5 px-3">Date</th>
+                <th class="py-2.5 px-3">Client</th>
+                <th class="py-2.5 px-3">Invoice #</th>
+                <th class="py-2.5 px-3">OTF #</th>
+                <th class="py-2.5 px-3">Item</th>
+                <th class="py-2.5 px-3 text-right">Pulled Out</th>
+                <th class="py-2.5 px-3 text-right">Invoiced Qty</th>
+                <th class="py-2.5 px-3 text-right">Variance</th>
+                <th class="py-2.5 px-3">Remarks</th>
+              </tr>
+            </thead>
+            <tbody id="clientReconcileBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: DEDICATED AUTO-SYNC & EXCEL UPDATER ==================== -->
+    <section id="view-sync" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Upload & Auto-Parse Card -->
+        <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 mb-2">
+                DEDICATED AUTO-UPDATE ENGINE
+              </span>
+              <h2 class="text-xl font-extrabold text-slate-900">Sync CRYSTAL Cold Storage Workbook (.xlsx / .csv)</h2>
+              <p class="text-xs sm:text-sm text-slate-600 mt-1">
+                Drop your updated <strong>CRYSTAL</strong> Excel file here. The system automatically scans the summary sheet for all <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">OTF</code> headers, weights, re-inward balances, pull-outs, invoices, and <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-800">TOTAL</code> dates.
+              </p>
+            </div>
+          </div>
+
+          <!-- Import Mode Selector -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="border-2 border-amber-400 bg-amber-50/50 rounded-xl p-3.5 cursor-pointer flex items-start gap-3">
+              <input type="radio" name="importMode" value="merge" checked class="mt-1 text-amber-500 focus:ring-amber-400" />
+              <div>
+                <div class="font-bold text-xs sm:text-sm text-slate-900">Smart Merge / Upsert (Recommended)</div>
+                <p class="text-xs text-slate-600 mt-0.5">Updates existing OTF lines and appends new OTF batches without losing manual adjustments.</p>
+              </div>
+            </label>
+            <label class="border border-slate-200 hover:border-slate-300 rounded-xl p-3.5 cursor-pointer flex items-start gap-3">
+              <input type="radio" name="importMode" value="replace" class="mt-1 text-amber-500 focus:ring-amber-400" />
+              <div>
+                <div class="font-bold text-xs sm:text-sm text-slate-900">Full Cutoff Replace</div>
+                <p class="text-xs text-slate-600 mt-0.5">Replaces the entire dashboard dataset with the newly uploaded cutoff workbook.</p>
+              </div>
+            </label>
+          </div>
+
+          <!-- Dropzone -->
+          <div id="dropZone" onclick="document.getElementById('excelFileInput').click()" class="border-2 border-dashed border-slate-300 hover:border-amber-400 bg-slate-50 hover:bg-amber-50/30 rounded-2xl p-8 text-center cursor-pointer transition">
+            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelUpload(event)" />
+            <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-700 mx-auto flex items-center justify-center mb-3">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            </div>
+            <p class="font-bold text-sm text-slate-900">Click to select Excel file or drag & drop here</p>
+            <p class="text-xs text-slate-500 mt-1">Supports CRYSTAL June 1–15 / June 16–30 multi-OTF format (.xlsx, .xls, .csv)</p>
+          </div>
+
+          <!-- Automation Controls -->
+          <div class="bg-slate-900 text-white rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="space-y-0.5">
+              <div class="font-bold text-sm flex items-center gap-2">
+                <span>Automatic Variance & Balance Reconciliation</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">ACTIVE</span>
+              </div>
+              <p class="text-xs text-slate-400">Automatically computes <code class="text-amber-300">Re-Inward = Qty - Pulled Out</code> and <code class="text-amber-300">Variance = Pulled Out - Invoiced Qty</code> on every edit.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="runAutoReconcile()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs px-3.5 py-2 rounded-lg">
+                Run Auto-Reconcile Now
+              </button>
+              <button onclick="resetToBaseline()" class="bg-slate-800 hover:bg-rose-900/60 text-slate-200 border border-slate-700 text-xs font-semibold px-3.5 py-2 rounded-lg">
+                Reset June 1–15 Data
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sync Activity & History Log -->
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-slate-900 text-sm">Auto-Sync & Update Audit Log</h3>
+            <span class="text-[11px] text-emerald-600 font-semibold">Live Persisted</span>
+          </div>
+          <div id="syncLogContainer" class="space-y-2.5 overflow-y-auto max-h-96 pr-1 scrollbar-thin text-xs flex-1"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- QUICK UPDATE / NEW OTF MODAL -->
+  <div id="editModal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden">
+      <div class="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
+        <h3 id="modalTitle" class="font-bold text-base">Update OTF Inventory Line</h3>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+      </div>
+      <form id="otfLineForm" onsubmit="saveOtfLine(event)" class="p-5 space-y-4 text-xs">
+        <input type="hidden" id="editRecordId" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">OTF Number</label>
+            <input type="text" id="f_otf" required placeholder="e.g. OTF 055035" class="w-full border border-slate-300 rounded-lg px-3 py-2 font-medium" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Date</label>
+            <input type="date" id="f_date" required value="2026-06-15" class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-2">
+            <label class="block font-semibold text-slate-700 mb-1">Seafood Item / SKU</label>
+            <input type="text" id="f_item" required placeholder="e.g. BANGUS B/L" class="w-full border border-slate-300 rounded-lg px-3 py-2 uppercase font-semibold" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Package</label>
+            <select id="f_pkg" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white">
+              <option value="PC">PC</option>
+              <option value="BOX">BOX</option>
+              <option value="PACK">PACK</option>
+              <option value="SACKS">SACKS</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Total Qty</label>
+            <input type="number" step="any" id="f_qty" required oninput="autoCalcModalFields()" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Weight (kg)</label>
+            <input type="number" step="any" id="f_weight" required class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5" />
+          </div>
+          <div>
+            <label class="block font-semibold text-blue-700 mb-1">Pulled Out</label>
+            <input type="number" step="any" id="f_pulled" value="0" oninput="autoCalcModalFields()" class="w-full border border-blue-300 rounded-lg px-2.5 py-1.5 font-bold text-blue-700" />
+          </div>
+          <div>
+            <label class="block font-semibold text-emerald-700 mb-1">Re-Inward</label>
+            <input type="number" step="any" id="f_reinward" class="w-full border border-emerald-300 rounded-lg px-2.5 py-1.5 font-bold text-emerald-700 bg-emerald-50/40" />
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Invoice #</label>
+            <input type="text" id="f_invoice" placeholder="e.g. 27680" class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Client</label>
+            <input type="text" id="f_client" placeholder="e.g. SODEXO" class="w-full border border-slate-300 rounded-lg px-3 py-2 uppercase" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Invoiced Qty</label>
+            <input type="number" step="any" id="f_inv_qty" value="0" class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Remarks</label>
+          <input type="text" id="f_remarks" placeholder="e.g. FREEZER / OFFSET W/ SI..." class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeEditModal()" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-semibold">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold shadow">Save & Auto-Update</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // EXACT EXTRACTED DATASET FROM "CRYSTAL June 1-15, 2026.xlsx" (Sheet: June 1-15)
+    const BASELINE_RECORDS = [
+      {id:1,otf:"OTF 000054512",date:"2026-06-01",item:"MAHI",pkg:"PC",qty:22,weight:164.01,re_inward:22,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:2,otf:"OTF 000054512",date:"2026-06-01",item:"MACKEREL",pkg:"BOX",qty:42,weight:70.014,re_inward:42,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:3,otf:"OTF 000054512",date:"2026-06-01",item:"TAHONG",pkg:"PC",qty:4,weight:29,re_inward:4,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:4,otf:"OTF 000054512",date:"2026-06-01",item:"LAPU BLACK",pkg:"PC",qty:2,weight:9,re_inward:2,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:5,otf:"OTF 000054512",date:"2026-06-01",item:"TUNA PANGA",pkg:"PC",qty:1,weight:6,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:6,otf:"OTF 000054512",date:"2026-06-01",item:"ASSORTED",pkg:"PC",qty:1,weight:14,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:7,otf:"OTF 000054512",date:"2026-06-01",item:"TILAPIA",pkg:"PC",qty:20,weight:150,re_inward:20,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:8,otf:"OTF 000054512",date:"2026-06-01",item:"HASA HASA",pkg:"PC",qty:34,weight:53.006,re_inward:27,pulled_out:7,invoice:"27496",client:"SODEXO",inv_qty:10,variance:-3,remarks:""},
+      {id:9,otf:"OTF 000054512",date:"2026-06-01",item:"ALUMAHAN",pkg:"PC",qty:41,weight:64,re_inward:0,pulled_out:41,invoice:"27500",client:"SODEXO",inv_qty:50,variance:-9,remarks:""},
+      {id:10,otf:"OTF 000054512",date:"2026-06-01",item:"LAPIS",pkg:"PC",qty:4,weight:13,re_inward:4,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:11,otf:"OTF 000054512",date:"2026-06-01",item:"SAGUISI",pkg:"PC",qty:6,weight:24,re_inward:6,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:12,otf:"OTF 000054512",date:"2026-06-01",item:"ALUMAHAN",pkg:"PC",qty:1,weight:12,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:13,otf:"OTF 000054512",date:"2026-06-01",item:"MUSSEL HALF SHELL",pkg:"BOX",qty:23,weight:230,re_inward:17,pulled_out:6,invoice:"27499",client:"NOVOTEL",inv_qty:6,variance:0,remarks:""},
+      {id:14,otf:"OTF 000054512",date:"2026-06-01",item:"LAPU RED",pkg:"PC",qty:8,weight:33,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:15,otf:"OTF 000054512",date:"2026-06-01",item:"MAMENG",pkg:"PC",qty:15,weight:70.995,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:16,otf:"OTF 000054512",date:"2026-06-01",item:"YELLOW FIN TUNA",pkg:"PC",qty:25,weight:59,re_inward:25,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:17,otf:"OTF 000054512",date:"2026-06-01",item:"SCALLOP",pkg:"PC",qty:1,weight:6,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:18,otf:"OTF 000054512",date:"2026-06-01",item:"TALAKITOK",pkg:"PC",qty:2,weight:25,re_inward:2,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:19,otf:"OTF 000054512",date:"2026-06-01",item:"TUNA BELLY",pkg:"PC",qty:1,weight:11,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:20,otf:"OTF 000054512",date:"2026-06-01",item:"BISUGO",pkg:"PC",qty:3,weight:30.999,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:21,otf:"OTF 000054512",date:"2026-06-01",item:"LAPU BLACK",pkg:"PC",qty:18,weight:23.004,re_inward:5,pulled_out:13,invoice:"27502",client:"SODEXO",inv_qty:25,variance:-12,remarks:""},
+      {id:22,otf:"OTF 000054512",date:"2026-06-01",item:"GALUNGGONG",pkg:"PC",qty:33,weight:58.508,re_inward:25,pulled_out:8,invoice:"27500",client:"SODEXO",inv_qty:60,variance:-52,remarks:""},
+      {id:23,otf:"OTF 000054512",date:"2026-06-01",item:"GALUNGGONG",pkg:"PC",qty:84,weight:121.968,re_inward:54,pulled_out:30,invoice:"27500",client:"SODEXO",inv_qty:60,variance:-30,remarks:""},
+      {id:24,otf:"OTF 000054512",date:"2026-06-01",item:"JABAO",pkg:"PC",qty:30,weight:81.99,re_inward:30,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:25,otf:"OTF 000054512",date:"2026-06-01",item:"BUBULI",pkg:"PC",qty:112,weight:530.992,re_inward:111,pulled_out:1,invoice:"27521",client:"UNITED MARINE",inv_qty:5,variance:-4,remarks:""},
+      {id:26,otf:"OTF 000054512",date:"2026-06-01",item:"BANGUS WHOLE",pkg:"PC",qty:4,weight:34,re_inward:4,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:27,otf:"OTF 000054512",date:"2026-06-01",item:"BANGUS B/L",pkg:"PC",qty:296,weight:287,re_inward:144,pulled_out:152,invoice:"27496/ 98",client:"NOVOTEL",inv_qty:100,variance:52,remarks:""},
+      {id:28,otf:"OTF 000054512",date:"2026-06-01",item:"SQUID HEAD",pkg:"PC",qty:8,weight:68,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:29,otf:"OTF 000054512",date:"2026-06-01",item:"ALUMAHAN",pkg:"PC",qty:93,weight:99.045,re_inward:60,pulled_out:33,invoice:"27519",client:"SODEXO",inv_qty:20,variance:13,remarks:"OFFSET W/ SI 27500"},
+      {id:30,otf:"OTF 000054545",date:"2026-06-01",item:"OME",pkg:"PC",qty:9,weight:44.001,re_inward:9,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:31,otf:"OTF 000054545",date:"2026-06-01",item:"APAHAP",pkg:"PC",qty:8,weight:19.504,re_inward:0,pulled_out:8,invoice:"27547",client:"SMPI",inv_qty:50,variance:-42,remarks:""},
+      {id:32,otf:"OTF 000054545",date:"2026-06-01",item:"MAMENG",pkg:"PC",qty:4,weight:17.5,re_inward:4,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:33,otf:"OTF 000054545",date:"2026-06-01",item:"JABAO",pkg:"PC",qty:17,weight:48.994,re_inward:17,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:34,otf:"OTF 000054545",date:"2026-06-01",item:"MAHI",pkg:"PC",qty:69,weight:415.518,re_inward:69,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:35,otf:"OTF 000054545",date:"2026-06-01",item:"LAPU RED",pkg:"PC",qty:2,weight:9,re_inward:2,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:36,otf:"OTF 000054551",date:"2026-06-02",item:"JABAO",pkg:"PC",qty:30,weight:81.99,re_inward:30,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:37,otf:"OTF 000054551",date:"2026-06-02",item:"YELLOW FIN TUNA",pkg:"PC",qty:25,weight:59,re_inward:25,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:38,otf:"OTF 000054551",date:"2026-06-02",item:"MAMENG",pkg:"PC",qty:15,weight:70.995,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:39,otf:"OTF 000054551",date:"2026-06-02",item:"MAHI",pkg:"PC",qty:22,weight:164.01,re_inward:22,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:40,otf:"OTF 000054551",date:"2026-06-02",item:"BANGUS B/L",pkg:"PC",qty:144,weight:135.936,re_inward:0,pulled_out:144,invoice:"27544/ 51",client:"RAMADA/ MANIAL PEN",inv_qty:150,variance:-6,remarks:""},
+      {id:41,otf:"OTF 000054551",date:"2026-06-02",item:"GALUNGGONG",pkg:"PC",qty:54,weight:77.004,re_inward:54,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:42,otf:"OTF 000054551",date:"2026-06-02",item:"HASA HASA",pkg:"PC",qty:27,weight:42.012,re_inward:27,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:43,otf:"OTF 000054551",date:"2026-06-02",item:"MACKEREL",pkg:"PC",qty:42,weight:70.014,re_inward:42,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:44,otf:"OTF 000054630",date:"2026-06-03",item:"MAHI",pkg:"PC",qty:80,weight:552,re_inward:74,pulled_out:6,invoice:"27558",client:"CENTURY",inv_qty:15,variance:-9,remarks:""},
+      {id:45,otf:"OTF 000054630",date:"2026-06-03",item:"KANARIO",pkg:"PC",qty:49,weight:267.001,re_inward:49,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:46,otf:"OTF 000054630",date:"2026-06-03",item:"JABAO",pkg:"PC",qty:52,weight:135.928,re_inward:52,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:47,otf:"OTF 000054630",date:"2026-06-03",item:"APAHAP",pkg:"PC",qty:37,weight:161.505,re_inward:6,pulled_out:31,invoice:"27547",client:"SMPI",inv_qty:50,variance:-19,remarks:""},
+      {id:48,otf:"OTF 000054630",date:"2026-06-03",item:"BITILYA",pkg:"PC",qty:2,weight:7.5,re_inward:66,pulled_out:-64,invoice:"",client:"",inv_qty:0,variance:0,remarks:"CHECK RE-INWARD OVERRIDE"},
+      {id:49,otf:"OTF 000054630",date:"2026-06-03",item:"OME",pkg:"PC",qty:15,weight:55.5,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:50,otf:"OTF 000054630",date:"2026-06-03",item:"BITILYA",pkg:"PC",qty:89,weight:425,re_inward:0,pulled_out:89,invoice:"27560",client:"ADB",inv_qty:100,variance:-11,remarks:""},
+      {id:51,otf:"OTF 000054632",date:"2026-06-03",item:"LAPU RED",pkg:"PC",qty:8,weight:38,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:52,otf:"OTF 000054632",date:"2026-06-03",item:"ALUMAHAN",pkg:"PC",qty:80,weight:100.95,re_inward:63,pulled_out:17,invoice:"27550",client:"SODEXO",inv_qty:20,variance:374,remarks:"EXCEL VARIANCE ENTRY: 374"},
+      {id:53,otf:"OTF 000054632",date:"2026-06-03",item:"LAPU BLACK",pkg:"PC",qty:5,weight:14,re_inward:5,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:54,otf:"OTF 000054632",date:"2026-06-03",item:"BARRAMUNDI FILLET",pkg:"BOX",qty:10,weight:100,re_inward:6,pulled_out:4,invoice:"27554",client:"DISCOVERY SUITES",inv_qty:4,variance:0,remarks:""},
+      {id:55,otf:"OTF 000054640",date:"2026-06-04",item:"SHRIMP PD 16-20",pkg:"BOX",qty:9,weight:90,re_inward:8,pulled_out:1,invoice:"27555",client:"NEW WORLD",inv_qty:1,variance:0,remarks:""},
+      {id:56,otf:"OTF 000054691",date:"2026-06-05",item:"MAHI",pkg:"PC",qty:22,weight:164.01,re_inward:22,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:57,otf:"OTF 000054691",date:"2026-06-05",item:"CREAMDORY",pkg:"BOX",qty:17,weight:170,re_inward:12,pulled_out:5,invoice:"27565",client:"DISCOVERY SUITES",inv_qty:50,variance:-45,remarks:""},
+      {id:58,otf:"OTF 000054691",date:"2026-06-05",item:"GALUNGGONG",pkg:"PC",qty:25,weight:35,re_inward:25,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:59,otf:"OTF 000054691",date:"2026-06-05",item:"HASA",pkg:"PC",qty:14,weight:21,re_inward:14,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:60,otf:"OTF 000054691",date:"2026-06-05",item:"MACKEREL",pkg:"PC",qty:42,weight:70.014,re_inward:42,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:61,otf:"OTF 000054691",date:"2026-06-05",item:"MAMENG",pkg:"PC",qty:15,weight:70.995,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:62,otf:"OTF 000054691",date:"2026-06-05",item:"JABAO",pkg:"PC",qty:30,weight:81.99,re_inward:30,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:63,otf:"OTF 000054691",date:"2026-06-05",item:"YELLOW FIN TUNA",pkg:"PC",qty:25,weight:59,re_inward:25,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:64,otf:"OTF 000054734",date:"2026-06-06",item:"MAHI",pkg:"BOX",qty:22,weight:164.01,re_inward:22,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:65,otf:"OTF 000054734",date:"2026-06-06",item:"MAMENG",pkg:"BOX",qty:15,weight:70.995,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:66,otf:"OTF 000054734",date:"2026-06-06",item:"TUNA BELLY",pkg:"BOX",qty:1,weight:11,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:67,otf:"OTF 000054734",date:"2026-06-06",item:"BANGUS WHOLE",pkg:"BOX",qty:4,weight:34,re_inward:4,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:68,otf:"OTF 000054734",date:"2026-06-06",item:"JABAO",pkg:"BOX",qty:30,weight:81.9,re_inward:30,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:69,otf:"OTF 000054734",date:"2026-06-06",item:"MACKEREL",pkg:"BOX",qty:42,weight:70.014,re_inward:23,pulled_out:19,invoice:"27574",client:"SODEXO - JPMC - IFC",inv_qty:20,variance:-1,remarks:""},
+      {id:70,otf:"OTF 000054734",date:"2026-06-06",item:"BISUGO",pkg:"BOX",qty:3,weight:30.999,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:71,otf:"OTF 000054734",date:"2026-06-06",item:"BANGUS B/L",pkg:"PC",qty:79,weight:74.023,re_inward:79,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:72,otf:"OTF 000054734",date:"2026-06-06",item:"YELLOW FIN TUNA",pkg:"BOX",qty:25,weight:69,re_inward:25,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:73,otf:"OTF 000054734",date:"2026-06-06",item:"HASA HASA",pkg:"PC",qty:14,weight:21,re_inward:2,pulled_out:12,invoice:"27574",client:"SODEXO - JPMC - IFC",inv_qty:20,variance:-8,remarks:""},
+      {id:74,otf:"OTF 000054734",date:"2026-06-06",item:"SQUID HEAD",pkg:"BOX",qty:8,weight:58,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:75,otf:"OTF 000054734",date:"2026-06-06",item:"TILAPIA",pkg:"BOX",qty:20,weight:150,re_inward:20,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:76,otf:"OTF 000054734",date:"2026-06-06",item:"ASSORTED",pkg:"BOX",qty:1,weight:14,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:77,otf:"OTF 000054734",date:"2026-06-06",item:"ALUMAHAN",pkg:"BOX",qty:1,weight:12,re_inward:0,pulled_out:1,invoice:"DR 4118/27604",client:"SODEXO - GOOGLE - WCC",inv_qty:8,variance:-7,remarks:""},
+      {id:78,otf:"OTF 000054803",date:"2026-06-08",item:"BARRAMUNDI FILLET",pkg:"BOX",qty:5,weight:60,re_inward:1,pulled_out:4,invoice:"27595",client:"SMPI",inv_qty:5,variance:-1,remarks:""},
+      {id:79,otf:"OTF 000054803",date:"2026-06-08",item:"PD 31-40",pkg:"BOX",qty:39,weight:380,re_inward:37,pulled_out:2,invoice:"27593",client:"DISCOVERY SUITES",inv_qty:1,variance:1,remarks:"FREEZER"},
+      {id:80,otf:"OTF 000054803",date:"2026-06-08",item:"SQUID TUBE",pkg:"BOX",qty:13,weight:130,re_inward:13,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:81,otf:"OTF 000054803",date:"2026-06-08",item:"SQUID RING",pkg:"BOX",qty:16,weight:160,re_inward:15,pulled_out:1,invoice:"27593",client:"DISCOVERY SUITES",inv_qty:1,variance:0,remarks:""},
+      {id:82,otf:"OTF 054806",date:"2026-06-08",item:"DAPA",pkg:"PC",qty:1,weight:9,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:83,otf:"OTF 054806",date:"2026-06-08",item:"TALAKITOK",pkg:"PC",qty:3,weight:26.001,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:84,otf:"OTF 054806",date:"2026-06-08",item:"JABAO",pkg:"PC",qty:12,weight:117.996,re_inward:0,pulled_out:12,invoice:"27609",client:"CENTURY - HOT",inv_qty:12,variance:0,remarks:""},
+      {id:85,otf:"OTF 054838",date:"2026-06-11",item:"MAHI",pkg:"PC",qty:69,weight:46,re_inward:69,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:86,otf:"OTF 054838",date:"2026-06-11",item:"MAHI",pkg:"PC",qty:69,weight:415.516,re_inward:55,pulled_out:14,invoice:"27609",client:"CENTURY - HOT",inv_qty:33,variance:-19,remarks:""},
+      {id:87,otf:"OTF 054838",date:"2026-06-11",item:"MAMENG",pkg:"PC",qty:4,weight:17.6,re_inward:4,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:88,otf:"OTF 054838",date:"2026-06-11",item:"LAPU RED",pkg:"PC",qty:2,weight:9,re_inward:0,pulled_out:2,invoice:"27657",client:"SODEXO - SWP",inv_qty:80,variance:-78,remarks:""},
+      {id:89,otf:"OTF 054838",date:"2026-06-11",item:"BITILYA",pkg:"PC",qty:105,weight:466,re_inward:105,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:90,otf:"OTF 054838",date:"2026-06-11",item:"OME",pkg:"PC",qty:9,weight:44.01,re_inward:9,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:91,otf:"OTF 054838",date:"2026-06-11",item:"JABAO",pkg:"PC",qty:17,weight:48.994,re_inward:17,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:92,otf:"OTF 054841",date:"2026-06-10",item:"BARRAMUNDI FILLET",pkg:"PC",qty:1,weight:10,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:93,otf:"OTF 054841",date:"2026-06-10",item:"PD 31-40",pkg:"PC",qty:37,weight:370,re_inward:35,pulled_out:2,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:94,otf:"OTF 054886",date:"2026-06-10",item:"BARRAMUNDI FILLET",pkg:"BOX",qty:1,weight:10,re_inward:0,pulled_out:1,invoice:"27645",client:"DISCOVERY SUITES",inv_qty:1,variance:0,remarks:""},
+      {id:95,otf:"OTF 054886",date:"2026-06-10",item:"PD 31-40",pkg:"PC",qty:35,weight:360,re_inward:35,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:96,otf:"OTF 054886",date:"2026-06-10",item:"MUSSEL HALF SHELL",pkg:"BOX",qty:17,weight:170,re_inward:16,pulled_out:1,invoice:"27645",client:"DISCOVERY SUITES",inv_qty:1,variance:0,remarks:""},
+      {id:97,otf:"OTF 054887",date:"2026-06-10",item:"SALMON WHOLE",pkg:"BOX",qty:3,weight:96.42,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:98,otf:"OTF 054887",date:"2026-06-10",item:"BARRAMUNDI FILLET",pkg:"BOX",qty:10,weight:100,re_inward:8,pulled_out:2,invoice:"27645",client:"DISCOVERY SUITES",inv_qty:2,variance:0,remarks:""},
+      {id:99,otf:"OTF 054925",date:"2026-06-11",item:"TUNA BELLY",pkg:"PACK",qty:1,weight:11,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:100,otf:"OTF 054925",date:"2026-06-11",item:"TILAPIA",pkg:"PACK",qty:20,weight:150,re_inward:14,pulled_out:6,invoice:"27654",client:"SODEXO -SWP",inv_qty:50,variance:-44,remarks:""},
+      {id:101,otf:"OTF 054925",date:"2026-06-11",item:"ALUMAHAN",pkg:"PACK",qty:63,weight:80.01,re_inward:0,pulled_out:63,invoice:"27663",client:"SODEXO -SWP",inv_qty:100,variance:-37,remarks:""},
+      {id:102,otf:"OTF 054925",date:"2026-06-11",item:"BARRAMUNDI FILLET",pkg:"PC",qty:8,weight:80.01,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:103,otf:"OTF 054925",date:"2026-06-11",item:"SQUID HEAD",pkg:"PACK",qty:8,weight:68,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:104,otf:"OTF 054925",date:"2026-06-11",item:"ASSORTED",pkg:"PACK",qty:1,weight:14,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:105,otf:"OTF 054925",date:"2026-06-11",item:"SALMON WHOLE",pkg:"BOX",qty:3,weight:96.42,re_inward:0,pulled_out:3,invoice:"27659",client:"SODEXO - SWP",inv_qty:10,variance:-7,remarks:""},
+      {id:106,otf:"OTF 054925",date:"2026-06-11",item:"DAPA",pkg:"PC",qty:1,weight:9,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:107,otf:"OTF 054925",date:"2026-06-11",item:"TALAKITOK",pkg:"PC",qty:3,weight:26.001,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:108,otf:"OTF 054925",date:"2026-06-11",item:"BANGUS B/L",pkg:"PC",qty:7,weight:67.996,re_inward:0,pulled_out:7,invoice:"27668",client:"RAMADA",inv_qty:50,variance:-43,remarks:""},
+      {id:109,otf:"OTF 054925",date:"2026-06-11",item:"MUSSEL HALF SHELL",pkg:"PC",qty:16,weight:160,re_inward:6,pulled_out:10,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:110,otf:"OTF 054925",date:"2026-06-11",item:"BISUGO",pkg:"PACK",qty:3,weight:30.999,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:111,otf:"OTF 054925",date:"2026-06-11",item:"BANGUS WHOLE",pkg:"PACK",qty:4,weight:34,re_inward:0,pulled_out:4,invoice:"27663",client:"SODEXO -SWP",inv_qty:60,variance:-56,remarks:""},
+      {id:112,otf:"OTF 054925",date:"2026-06-11",item:"LAPU RED",pkg:"PC",qty:8,weight:38,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:113,otf:"OTF 054925",date:"2026-06-11",item:"LAPU BLACK",pkg:"PC",qty:5,weight:14,re_inward:5,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:114,otf:"OTF 054935",date:"2026-06-11",item:"LAPU BLACK",pkg:"BOX",qty:14,weight:87.5,re_inward:14,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:115,otf:"OTF 054935",date:"2026-06-11",item:"LORO",pkg:"BOX",qty:2,weight:3,re_inward:2,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:116,otf:"OTF 054935",date:"2026-06-11",item:"TUNA PANGA",pkg:"BOX",qty:4,weight:36,re_inward:4,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:117,otf:"OTF 054935",date:"2026-06-11",item:"BLUE MARLIN",pkg:"BOX",qty:7,weight:38,re_inward:7,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:118,otf:"OTF 054935",date:"2026-06-11",item:"TUNA LOIN",pkg:"BOX",qty:5,weight:15.5,re_inward:2,pulled_out:3,invoice:"27651",client:"SMPI",inv_qty:20,variance:-17,remarks:""},
+      {id:119,otf:"OTF 054976",date:"2026-06-11",item:"APAHAP",pkg:"PC",qty:23,weight:52.992,re_inward:23,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:120,otf:"OTF 054976",date:"2026-06-11",item:"SAGUISI",pkg:"PACK",qty:12,weight:44.004,re_inward:12,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:121,otf:"OTF 054976",date:"2026-06-11",item:"BANGUS B/L",pkg:"PACK",qty:35,weight:36.505,re_inward:35,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:122,otf:"OTF 054976",date:"2026-06-11",item:"HASA HASA",pkg:"PACK",qty:51,weight:81.498,re_inward:51,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:123,otf:"OTF 054976",date:"2026-06-11",item:"TALAKITOK",pkg:"BOX",qty:3,weight:25.001,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:124,otf:"OTF 054976",date:"2026-06-11",item:"ASSORTED",pkg:"BOX",qty:1,weight:14,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:125,otf:"OTF 054976",date:"2026-06-11",item:"TUNA BELLY",pkg:"BOX",qty:1,weight:11,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:126,otf:"OTF 054976",date:"2026-06-11",item:"DAPA",pkg:"BOX",qty:1,weight:9,re_inward:1,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:127,otf:"OTF 054976",date:"2026-06-11",item:"BISUGO",pkg:"BOX",qty:3,weight:30.999,re_inward:3,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:128,otf:"OTF 054976",date:"2026-06-11",item:"BARRAMUNDI FILLET",pkg:"BOX",qty:8,weight:80,re_inward:5,pulled_out:3,invoice:"27675",client:"SMPI",inv_qty:3,variance:0,remarks:""},
+      {id:129,otf:"OTF 054976",date:"2026-06-11",item:"LAPU RED",pkg:"PC",qty:15,weight:35.495,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:130,otf:"OTF 054976",date:"2026-06-11",item:"TILAPIA",pkg:"BOX",qty:14,weight:97.005,re_inward:14,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:131,otf:"OTF 054976",date:"2026-06-11",item:"SQUID HEAD",pkg:"BOX",qty:8,weight:68,re_inward:8,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:132,otf:"OTF 054976",date:"2026-06-11",item:"GALUNGGONG",pkg:"PACK",qty:30,weight:42.99,re_inward:30,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:133,otf:"OTF 054987",date:"2026-06-13",item:"APAHAP",pkg:"PACKS",qty:23,weight:52.992,re_inward:23,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:134,otf:"OTF 054987",date:"2026-06-13",item:"HASA HASA",pkg:"PACKS",qty:18,weight:30.996,re_inward:18,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:135,otf:"OTF 054987",date:"2026-06-13",item:"SAGUISI",pkg:"PACKS",qty:12,weight:44.004,re_inward:12,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:136,otf:"OTF 054987",date:"2026-06-13",item:"LAPU RED",pkg:"SACKS",qty:15,weight:36.495,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:137,otf:"OTF 055030",date:"2026-06-14",item:"LAPU RED",pkg:"BOX",qty:15,weight:36.495,re_inward:15,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:138,otf:"OTF 055030",date:"2026-06-14",item:"MAYA",pkg:"PCS",qty:2,weight:8,re_inward:2,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:139,otf:"OTF 055030",date:"2026-06-14",item:"APAHAP",pkg:"PCS",qty:66,weight:151,re_inward:66,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""},
+      {id:140,otf:"OTF 055030",date:"2026-06-14",item:"LAPU BLACK",pkg:"PCS",qty:2,weight:7.5,re_inward:2,pulled_out:0,invoice:"",client:"",inv_qty:0,variance:0,remarks:""}
+    ];
+
+    const STORAGE_KEY = 'gcr_crystal_otf_records_v1';
+    const LOG_KEY = 'gcr_crystal_sync_logs_v1';
+    let records = [];
+    let syncLogs = [];
+    let autoSyncEnabled = true;
+    let dailyChart = null;
+    let clientChart = null;
+
+    function loadState() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          records = JSON.parse(saved);
+        } catch {
+          records = JSON.parse(JSON.stringify(BASELINE_RECORDS));
+        }
+      } else {
+        records = JSON.parse(JSON.stringify(BASELINE_RECORDS));
+      }
+
+      const savedLogs = localStorage.getItem(LOG_KEY);
+      if (savedLogs) {
+        syncLogs = JSON.parse(savedLogs);
+      } else {
+        syncLogs = [
+          { time: 'Baseline Loaded', type: 'IMPORT', title: 'CRYSTAL June 1-15, 2026.xlsx', detail: '19 OTF batches • 140 line items • 12,167.85 kg initialized.' }
+        ];
+      }
+    }
+
+    function saveState(logEntry = null) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      if (logEntry) {
+        syncLogs.unshift({ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), ...logEntry });
+        localStorage.setItem(LOG_KEY, JSON.stringify(syncLogs.slice(0, 40)));
+        document.getElementById('lastSyncText').textContent = `Updated ${syncLogs[0].time}`;
+      }
+      refreshAllViews();
+    }
+
+    function toggleAutoSync() {
+      autoSyncEnabled = !autoSyncEnabled;
+      const btn = document.getElementById('toggleAutoSyncBtn');
+      const dot = document.getElementById('autoSyncDot');
+      btn.textContent = autoSyncEnabled ? 'ON' : 'OFF';
+      btn.className = autoSyncEnabled ? 'font-semibold text-emerald-400 hover:underline' : 'font-semibold text-slate-400 hover:underline';
+      dot.className = autoSyncEnabled ? 'w-2 h-2 rounded-full bg-emerald-400 pulse-dot' : 'w-2 h-2 rounded-full bg-slate-500';
+    }
+
+    function switchTab(tab) {
+      ['dashboard', 'otf', 'inventory', 'clients', 'sync'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tab) {
+          btn.classList.add('border-amber-400', 'text-amber-400', 'font-semibold');
+          btn.classList.remove('border-transparent', 'text-slate-400', 'font-medium');
+        } else {
+          btn.classList.remove('border-amber-400', 'text-amber-400', 'font-semibold');
+          btn.classList.add('border-transparent', 'text-slate-400', 'font-medium');
+        }
+      });
+    }
+
+    function refreshAllViews() {
+      updateKPIs();
+      renderCharts();
+      renderAnomalies();
+      renderTopSkus();
+      populateFilters();
+      renderOtfTable();
+      renderMasterInventory();
+      renderClientsView();
+      renderSyncLogs();
+    }
+
+    function updateKPIs() {
+      const otfs = new Set(records.map(r => r.otf));
+      const totalQty = records.reduce((s, r) => s + Number(r.qty || 0), 0);
+      const totalWt = records.reduce((s, r) => s + Number(r.weight || 0), 0);
+      const totalRe = records.reduce((s, r) => s + Number(r.re_inward || 0), 0);
+      const totalPull = records.reduce((s, r) => s + Number(r.pulled_out || 0), 0);
+      const totalInv = records.reduce((s, r) => s + Number(r.inv_qty || 0), 0);
+      const netVar = records.reduce((s, r) => s + Number(r.variance || 0), 0);
+      const flags = records.filter(r => Number(r.variance || 0) !== 0 || Number(r.pulled_out || 0) < 0).length;
+
+      document.getElementById('kpi-otf-count').textContent = `${otfs.size} OTFs`;
+      document.getElementById('kpi-total-qty').textContent = totalQty.toLocaleString();
+      document.getElementById('kpi-total-weight').textContent = `${totalWt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`;
+      document.getElementById('kpi-total-reinward').textContent = totalRe.toLocaleString();
+      document.getElementById('kpi-reinward-pct').textContent = totalQty ? `${((totalRe / totalQty) * 100).toFixed(1)}%` : '0%';
+      document.getElementById('kpi-total-pulled').textContent = totalPull.toLocaleString();
+      document.getElementById('kpi-pulled-pct').textContent = totalQty ? `${((totalPull / totalQty) * 100).toFixed(1)}%` : '0%';
+      document.getElementById('kpi-total-invoiced').textContent = totalInv.toLocaleString();
+      document.getElementById('kpi-net-variance').textContent = (netVar > 0 ? '+' : '') + netVar.toLocaleString();
+      document.getElementById('kpi-alert-count').textContent = `${flags} flags`;
+    }
+
+    function renderCharts() {
+      // Group by Date
+      const dateMap = {};
+      records.forEach(r => {
+        const d = r.date || 'Unassigned';
+        if (!dateMap[d]) dateMap[d] = { reinward: 0, pulled: 0 };
+        dateMap[d].reinward += Number(r.re_inward || 0);
+        dateMap[d].pulled += Number(r.pulled_out || 0);
+      });
+      const sortedDates = Object.keys(dateMap).sort();
+
+      if (dailyChart) dailyChart.destroy();
+      dailyChart = new Chart(document.getElementById('dailyMovementChart'), {
+        type: 'bar',
+        data: {
+          labels: sortedDates.map(d => d.slice(5)),
+          datasets: [
+            { label: 'Re-Inward Balance', data: sortedDates.map(d => dateMap[d].reinward), backgroundColor: '#10b981', borderRadius: 6 },
+            { label: 'Pulled Out (Dispatched)', data: sortedDates.map(d => dateMap[d].pulled), backgroundColor: '#2563eb', borderRadius: 6 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+          scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
+        }
+      });
+
+      // Group by Client
+      const clientMap = {};
+      records.forEach(r => {
+        const c = (r.client || '').trim();
+        if (!c) return;
+        const norm = c.startsWith('SODEXO') ? 'SODEXO (All Sites)' : c;
+        if (!clientMap[norm]) clientMap[norm] = { pulled: 0, invoiced: 0 };
+        clientMap[norm].pulled += Number(r.pulled_out || 0);
+        clientMap[norm].invoiced += Number(r.inv_qty || 0);
+      });
+      const topClients = Object.entries(clientMap).sort((a, b) => b[1].invoiced - a[1].invoiced).slice(0, 6);
+
+      if (clientChart) clientChart.destroy();
+      clientChart = new Chart(document.getElementById('clientAllocationChart'), {
+        type: 'bar',
+        data: {
+          labels: topClients.map(x => x[0]),
+          datasets: [
+            { label: 'Pulled Out', data: topClients.map(x => x[1].pulled), backgroundColor: '#f59e0b', borderRadius: 5 },
+            { label: 'Invoiced Qty', data: topClients.map(x => x[1].invoiced), backgroundColor: '#0f172a', borderRadius: 5 }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+          scales: { x: { beginAtZero: true }, y: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+        }
+      });
+    }
+
+    function renderAnomalies() {
+      const flagged = records.filter(r => Number(r.variance || 0) !== 0 || Number(r.pulled_out || 0) < 0);
+      const container = document.getElementById('anomalyList');
+      if (!flagged.length) {
+        container.innerHTML = `<div class="p-4 text-center text-slate-400">No variance discrepancies detected.</div>`;
+        return;
+      }
+      container.innerHTML = flagged.slice(0, 12).map(r => {
+        const isNeg = r.variance < 0 || r.pulled_out < 0;
+        return `
+          <div class="p-2.5 rounded-lg border ${isNeg ? 'border-rose-200 bg-rose-50/50' : 'border-amber-200 bg-amber-50/50'} flex items-center justify-between gap-2">
+            <div>
+              <div class="font-bold text-slate-900">${r.item} <span class="font-normal text-slate-500">(${r.otf})</span></div>
+              <div class="text-[11px] text-slate-600">${r.client || 'Internal Stock'} • Pulled: <strong>${r.pulled_out}</strong> vs Inv: <strong>${r.inv_qty}</strong></div>
+            </div>
+            <div class="text-right">
+              <span class="px-2 py-0.5 rounded font-bold text-[11px] ${isNeg ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800'}">
+                ${r.pulled_out < 0 ? 'Pull: ' + r.pulled_out : 'Var: ' + (r.variance > 0 ? '+' + r.variance : r.variance)}
+              </span>
+              <button onclick="openEditModal(${r.id})" class="block text-[10px] text-slate-500 hover:text-slate-900 underline mt-1 ml-auto">Fix</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getConsolidatedSkus() {
+      const map = {};
+      records.forEach(r => {
+        const key = (r.item || 'UNKNOWN').trim().toUpperCase();
+        if (!map[key]) {
+          map[key] = { item: key, pkgs: new Set(), count: 0, qty: 0, weight: 0, re_inward: 0, pulled_out: 0 };
+        }
+        map[key].pkgs.add(r.pkg || 'PC');
+        map[key].count += 1;
+        map[key].qty += Number(r.qty || 0);
+        map[key].weight += Number(r.weight || 0);
+        map[key].re_inward += Number(r.re_inward || 0);
+        map[key].pulled_out += Number(r.pulled_out || 0);
+      });
+      return Object.values(map).sort((a, b) => b.weight - a.weight);
+    }
+
+    function renderTopSkus() {
+      const skus = getConsolidatedSkus().slice(0, 8);
+      document.getElementById('topSkuTableBody').innerHTML = skus.map(s => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2.5 px-2 font-bold text-slate-900">${s.item}</td>
+          <td class="py-2.5 px-2 text-right tabular-nums">${s.qty.toLocaleString()}</td>
+          <td class="py-2.5 px-2 text-right tabular-nums font-medium">${s.weight.toFixed(2)} kg</td>
+          <td class="py-2.5 px-2 text-right tabular-nums font-bold text-emerald-600">${s.re_inward.toLocaleString()}</td>
+          <td class="py-2.5 px-2 text-right tabular-nums text-blue-600">${s.pulled_out.toLocaleString()}</td>
+          <td class="py-2.5 px-2 text-right">
+            <button onclick="quickPullOutSku('${s.item}')" class="px-2 py-1 rounded bg-slate-900 hover:bg-amber-400 hover:text-slate-950 text-white text-[11px] font-semibold transition">
+              - Pull Out
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function populateFilters() {
+      const otfSel = document.getElementById('otfSelectFilter');
+      const curOtf = otfSel.value;
+      const otfs = [...new Set(records.map(r => r.otf))];
+      otfSel.innerHTML = `<option value="ALL">All ${otfs.length} OTF Batches</option>` + otfs.map(o => `<option value="${o}">${o}</option>`).join('');
+      if (otfs.includes(curOtf)) otfSel.value = curOtf;
+
+      const cliSel = document.getElementById('clientSelectFilter');
+      const curCli = cliSel.value;
+      const clients = [...new Set(records.map(r => (r.client || '').trim()).filter(Boolean))].sort();
+      cliSel.innerHTML = `<option value="ALL">All Clients (${clients.length})</option>` + clients.map(c => `<option value="${c}">${c}</option>`).join('');
+      if (clients.includes(curCli)) cliSel.value = curCli;
+    }
+
+    function renderOtfTable() {
+      const q = document.getElementById('otfSearchInput').value.toLowerCase();
+      const otfF = document.getElementById('otfSelectFilter').value;
+      const cliF = document.getElementById('clientSelectFilter').value;
+      const onlyPull = document.getElementById('onlyPulledOutCheck').checked;
+
+      const filtered = records.filter(r => {
+        if (otfF !== 'ALL' && r.otf !== otfF) return false;
+        if (cliF !== 'ALL' && (r.client || '').trim() !== cliF) return false;
+        if (onlyPull && !(Number(r.pulled_out) > 0 || r.invoice)) return false;
+        if (q && !`${r.otf} ${r.item} ${r.client} ${r.invoice} ${r.remarks}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      document.getElementById('otfLedgerBody').innerHTML = filtered.map(r => {
+        const varClass = r.variance < 0 ? 'text-rose-600 font-bold' : (r.variance > 0 ? 'text-amber-600 font-bold' : 'text-slate-400');
+        return `
+          <tr class="hover:bg-amber-50/40 transition">
+            <td class="py-2.5 px-3 whitespace-nowrap text-slate-600 tabular-nums">${r.date || '-'}</td>
+            <td class="py-2.5 px-3 whitespace-nowrap font-semibold text-slate-800">${r.otf}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-900">${r.item}</td>
+            <td class="py-2.5 px-2 text-slate-500">${r.pkg}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums font-medium">${r.qty}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums text-slate-600">${Number(r.weight).toFixed(2)}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums font-bold text-emerald-600">${r.re_inward}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums font-bold text-blue-600">${r.pulled_out}</td>
+            <td class="py-2.5 px-3 text-slate-700">${r.invoice || '-'}</td>
+            <td class="py-2.5 px-3 font-medium text-slate-800">${r.client || '-'}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums">${r.inv_qty || '-'}</td>
+            <td class="py-2.5 px-2 text-right tabular-nums ${varClass}">${r.variance !== 0 ? (r.variance > 0 ? '+' + r.variance : r.variance) : '0'}</td>
+            <td class="py-2.5 px-3 text-[11px] text-slate-500 max-w-[160px] truncate" title="${r.remarks}">${r.remarks || ''}</td>
+            <td class="py-2.5 px-3 text-right whitespace-nowrap">
+              <button onclick="openEditModal(${r.id})" class="px-2 py-1 rounded bg-slate-100 hover:bg-amber-400 text-slate-800 font-semibold text-[11px] transition">
+                Edit
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderMasterInventory() {
+      const q = document.getElementById('skuSearchInput').value.toLowerCase();
+      const skus = getConsolidatedSkus().filter(s => !q || s.item.toLowerCase().includes(q));
+      document.getElementById('masterInventoryBody').innerHTML = skus.map(s => {
+        const util = s.qty > 0 ? ((s.pulled_out / s.qty) * 100).toFixed(1) : '0.0';
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 px-4 font-bold text-slate-900">${s.item}</td>
+            <td class="py-3 px-3 text-slate-500">${[...s.pkgs].join(', ')}</td>
+            <td class="py-3 px-3 text-right tabular-nums">${s.count}</td>
+            <td class="py-3 px-3 text-right tabular-nums font-medium">${s.qty.toLocaleString()}</td>
+            <td class="py-3 px-3 text-right tabular-nums">${s.weight.toFixed(2)} kg</td>
+            <td class="py-3 px-3 text-right tabular-nums font-extrabold text-emerald-600">${s.re_inward.toLocaleString()}</td>
+            <td class="py-3 px-3 text-right tabular-nums font-semibold text-blue-600">${s.pulled_out.toLocaleString()}</td>
+            <td class="py-3 px-3 text-right tabular-nums">${util}%</td>
+            <td class="py-3 px-4 text-right whitespace-nowrap space-x-1">
+              <button onclick="quickPullOutSku('${s.item}')" class="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px]">- Pull Out</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderClientsView() {
+      const invoicedRows = records.filter(r => (r.client || '').trim() || Number(r.inv_qty) > 0);
+      const clientGroups = {};
+      invoicedRows.forEach(r => {
+        const c = (r.client || 'UNASSIGNED').trim();
+        if (!clientGroups[c]) clientGroups[c] = { client: c, pulls: 0, inv: 0, variance: 0, invoices: new Set() };
+        clientGroups[c].pulls += Number(r.pulled_out || 0);
+        clientGroups[c].inv += Number(r.inv_qty || 0);
+        clientGroups[c].variance += Number(r.variance || 0);
+        if (r.invoice) clientGroups[c].invoices.add(r.invoice);
+      });
+
+      document.getElementById('clientCardsContainer').innerHTML = Object.values(clientGroups).map(g => `
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-slate-900 text-sm">${g.client}</h4>
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">${g.invoices.size} SIs</span>
+          </div>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-center bg-slate-50 p-2.5 rounded-lg">
+            <div><div class="text-[10px] text-slate-500">Pulled Out</div><div class="font-bold text-blue-600 tabular-nums">${g.pulls}</div></div>
+            <div><div class="text-[10px] text-slate-500">Invoiced</div><div class="font-bold text-slate-900 tabular-nums">${g.inv}</div></div>
+            <div><div class="text-[10px] text-slate-500">Variance</div><div class="font-bold ${g.variance < 0 ? 'text-rose-600' : 'text-emerald-600'} tabular-nums">${g.variance}</div></div>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('clientReconcileBody').innerHTML = invoicedRows.map(r => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-2.5 px-3 tabular-nums">${r.date}</td>
+          <td class="py-2.5 px-3 font-bold text-slate-900">${r.client}</td>
+          <td class="py-2.5 px-3 text-slate-700">${r.invoice}</td>
+          <td class="py-2.5 px-3 text-slate-600">${r.otf}</td>
+          <td class="py-2.5 px-3 font-semibold">${r.item}</td>
+          <td class="py-2.5 px-3 text-right tabular-nums text-blue-600 font-bold">${r.pulled_out}</td>
+          <td class="py-2.5 px-3 text-right tabular-nums font-bold">${r.inv_qty}</td>
+          <td class="py-2.5 px-3 text-right tabular-nums font-bold ${r.variance < 0 ? 'text-rose-600' : 'text-amber-600'}">${r.variance}</td>
+          <td class="py-2.5 px-3 text-slate-500">${r.remarks || '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderSyncLogs() {
+      document.getElementById('syncLogContainer').innerHTML = syncLogs.map(l => `
+        <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/70">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${l.type === 'IMPORT' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${l.type}</span>
+            <span class="text-[11px] text-slate-400">${l.time}</span>
+          </div>
+          <div class="font-bold text-slate-900 mt-1">${l.title}</div>
+          <div class="text-[11px] text-slate-600 mt-0.5">${l.detail}</div>
+        </div>
+      `).join('');
+    }
+
+    // MODAL & QUICK ACTIONS
+    function openEditModal(id) {
+      const rec = records.find(r => r.id === id);
+      if (!rec) return;
+      document.getElementById('modalTitle').textContent = `Edit ${rec.item} (${rec.otf})`;
+      document.getElementById('editRecordId').value = rec.id;
+      document.getElementById('f_otf').value = rec.otf;
+      document.getElementById('f_date').value = rec.date || '2026-06-15';
+      document.getElementById('f_item').value = rec.item;
+      document.getElementById('f_pkg').value = rec.pkg || 'PC';
+      document.getElementById('f_qty').value = rec.qty;
+      document.getElementById('f_weight').value = rec.weight;
+      document.getElementById('f_pulled').value = rec.pulled_out;
+      document.getElementById('f_reinward').value = rec.re_inward;
+      document.getElementById('f_invoice').value = rec.invoice || '';
+      document.getElementById('f_client').value = rec.client || '';
+      document.getElementById('f_inv_qty').value = rec.inv_qty || 0;
+      document.getElementById('f_remarks').value = rec.remarks || '';
+      document.getElementById('editModal').classList.remove('hidden');
+      document.getElementById('editModal').classList.add('flex');
+    }
+
+    function openNewOtfModal() {
+      document.getElementById('modalTitle').textContent = 'Add New OTF Cold-Storage Line';
+      document.getElementById('editRecordId').value = '';
+      document.getElementById('otfLineForm').reset();
+      document.getElementById('f_date').value = '2026-06-15';
+      document.getElementById('editModal').classList.remove('hidden');
+      document.getElementById('editModal').classList.add('flex');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.add('hidden');
+      document.getElementById('editModal').classList.remove('flex');
+    }
+
+    function autoCalcModalFields() {
+      if (!autoSyncEnabled) return;
+      const qty = parseFloat(document.getElementById('f_qty').value) || 0;
+      const pulled = parseFloat(document.getElementById('f_pulled').value) || 0;
+      document.getElementById('f_reinward').value = Math.max(0, qty - pulled);
+    }
+
+    function saveOtfLine(e) {
+      e.preventDefault();
+      const idVal = document.getElementById('editRecordId').value;
+      const qty = parseFloat(document.getElementById('f_qty').value) || 0;
+      const pulled = parseFloat(document.getElementById('f_pulled').value) || 0;
+      const reinward = parseFloat(document.getElementById('f_reinward').value) || 0;
+      const invQty = parseFloat(document.getElementById('f_inv_qty').value) || 0;
+      const variance = invQty > 0 ? (pulled - invQty) : 0;
+
+      const payload = {
+        id: idVal ? Number(idVal) : (Math.max(0, ...records.map(r => r.id)) + 1),
+        otf: document.getElementById('f_otf').value.trim().toUpperCase(),
+        date: document.getElementById('f_date').value,
+        item: document.getElementById('f_item').value.trim().toUpperCase(),
+        pkg: document.getElementById('f_pkg').value,
+        qty,
+        weight: parseFloat(document.getElementById('f_weight').value) || 0,
+        re_inward: reinward,
+        pulled_out: pulled,
+        invoice: document.getElementById('f_invoice').value.trim(),
+        client: document.getElementById('f_client').value.trim().toUpperCase(),
+        inv_qty: invQty,
+        variance,
+        remarks: document.getElementById('f_remarks').value.trim()
+      };
+
+      if (idVal) {
+        const idx = records.findIndex(r => r.id === Number(idVal));
+        if (idx > -1) records[idx] = payload;
+        saveState({ type: 'UPDATE', title: `Updated ${payload.item} (${payload.otf})`, detail: `Re-Inward: ${payload.re_inward} • Pulled Out: ${payload.pulled_out}` });
+      } else {
+        records.unshift(payload);
+        saveState({ type: 'NEW ENTRY', title: `Added ${payload.item} (${payload.otf})`, detail: `Qty: ${payload.qty} • Weight: ${payload.weight} kg` });
+      }
+      closeEditModal();
+    }
+
+    function quickPullOutSku(itemName) {
+      const target = records.find(r => r.item === itemName && Number(r.re_inward) > 0);
+      if (!target) {
+        alert(`No remaining Re-Inward stock available for ${itemName}.`);
+        return;
+      }
+      openEditModal(target.id);
+    }
+
+    // EXCEL AUTO-PARSER FOR CRYSTAL MULTI-OTF WORKBOOKS
+    function handleExcelUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: 'array', cellDates: true });
+          const sheetName = wb.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: null });
+
+          const parsedBlocks = [];
+          let curr = null;
+
+          rows.forEach(r => {
+            if (!r || !r.some(v => v !== null && v !== '')) return;
+            const col0 = String(r[0] || '').trim();
+            if (col0.toUpperCase().startsWith('OTF')) {
+              curr = { otf: col0, rows: [], date: new Date().toISOString().slice(0, 10) };
+              parsedBlocks.push(curr);
+            } else if (curr) {
+              if (r[0] instanceof Date || String(r[1] || '').trim().toUpperCase() === 'TOTAL') {
+                if (r[0] instanceof Date && !isNaN(r[0])) {
+                  curr.date = r[0].toISOString().slice(0, 10);
+                }
+                curr = null;
+              } else if (r[1]) {
+                curr.rows.push(r);
+              }
+            }
+          });
+
+          const newRecords = [];
+          let nextId = Math.max(0, ...records.map(r => r.id)) + 1;
+          parsedBlocks.forEach(b => {
+            b.rows.forEach(r => {
+              const qty = Number(r[3] || 0);
+              const pulled = Number(r[6] || 0);
+              const invQty = Number(r[10] || 0);
+              const variance = r[11] !== null && r[11] !== '' ? Number(r[11]) : (invQty > 0 ? pulled - invQty : 0);
+              newRecords.push({
+                id: nextId++,
+                otf: b.otf,
+                date: b.date,
+                item: String(r[1] || '').trim().toUpperCase(),
+                pkg: String(r[2] || 'PC').trim().toUpperCase(),
+                qty,
+                weight: Number(r[4] || 0),
+                re_inward: r[5] !== null && r[5] !== '' ? Number(r[5]) : Math.max(0, qty - pulled),
+                pulled_out: pulled,
+                invoice: r[8] ? String(r[8]).trim() : '',
+                client: r[9] ? String(r[9]).trim().toUpperCase() : '',
+                inv_qty: invQty,
+                variance,
+                remarks: r[12] ? String(r[12]).trim() : ''
+              });
+            });
+          });
+
+          if (!newRecords.length) {
+            alert('No OTF blocks found in the uploaded sheet. Please verify the CRYSTAL OTF format.');
+            return;
+          }
+
+          const mode = document.querySelector('input[name="importMode"]:checked').value;
+          if (mode === 'replace') {
+            records = newRecords;
+          } else {
+            const incomingOtfs = new Set(newRecords.map(r => r.otf));
+            records = [...newRecords, ...records.filter(r => !incomingOtfs.has(r.otf))];
+          }
+
+          saveState({
+            type: 'IMPORT',
+            title: `Synced ${file.name} (${mode.toUpperCase()})`,
+            detail: `Parsed ${parsedBlocks.length} OTF batches (${newRecords.length} lines) from "${sheetName}".`
+          });
+          switchTab('dashboard');
+        } catch (err) {
+          alert('Error reading Excel file: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function runAutoReconcile() {
+      let updated = 0;
+      records = records.map(r => {
+        const expectedRe = Math.max(0, Number(r.qty || 0) - Number(r.pulled_out || 0));
+        const expectedVar = Number(r.inv_qty || 0) > 0 ? (Number(r.pulled_out || 0) - Number(r.inv_qty || 0)) : 0;
+        if (r.re_inward !== expectedRe || r.variance !== expectedVar) updated++;
+        return { ...r, re_inward: expectedRe, variance: expectedVar };
+      });
+      saveState({
+        type: 'AUTO-RECONCILE',
+        title: 'Executed Automatic Balance & Variance Rollup',
+        detail: `Reconciled ${updated} line items across ${records.length} total records.`
+      });
+    }
+
+    function resetToBaseline() {
+      if (!confirm('Reset all records back to the original CRYSTAL June 1–15, 2026 Excel dataset?')) return;
+      records = JSON.parse(JSON.stringify(BASELINE_RECORDS));
+      saveState({ type: 'RESET', title: 'Restored CRYSTAL June 1–15, 2026 Baseline', detail: '19 OTF batches • 140 line items restored.' });
+    }
+
+    function exportCurrentCSV() {
+      const headers = ['DATE', 'OTF', 'ITEM', 'PACKAGE', 'QTY', 'WEIGHT_KG', 'RE_INWARD', 'PULLED_OUT', 'INVOICE', 'CLIENT', 'INVOICED_QTY', 'VARIANCE', 'REMARKS'];
+      const csvRows = [headers.join(',')];
+      records.forEach(r => {
+        csvRows.push([
+          r.date, `"${r.otf}"`, `"${r.item}"`, r.pkg, r.qty, r.weight, r.re_inward, r.pulled_out,
+          `"${r.invoice || ''}"`, `"${r.client || ''}"`, r.inv_qty, r.variance, `"${r.remarks || ''}"`
+        ].join(','));
+      });
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `GCR_CRYSTAL_Inventory_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+    }
+
+    // Drag and drop wiring
+    const dz = document.getElementById('dropZone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-amber-400', 'bg-amber-50'); });
+    dz.addEventListener('dragleave', () => { dz.classList.remove('border-amber-400', 'bg-amber-50'); });
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.classList.remove('border-amber-400', 'bg-amber-50');
+      if (e.dataTransfer.files.length) {
+        document.getElementById('excelFileInput').files = e.dataTransfer.files;
+        handleExcelUpload({ target: { files: e.dataTransfer.files } });
+      }
+    });
+
+    // Boot
+    loadState();
+    refreshAllViews();
+  </script>
+</body>
+</html>
